@@ -1,10 +1,14 @@
 
+from __future__ import annotations
+
 import os
 from tkinter import *
 from tkinter.ttk import *
 
-from .limes import ALGO_CTAX,ALGO_MRATIO,Printer,get_text
+from .core import ALGO_CTAX,ALGO_MRATIO,Printer,get_text,Espace
 from .wlimes import enregistre,police1,police2,save_file
+
+from typing import Dict
 
 """
 Indices(espace)
@@ -15,7 +19,7 @@ class Indices(Toplevel):
     allalgo={ ALGO_CTAX: ("Ctax",".ctax"),
               ALGO_MRATIO: ("Match ratio",".mr") }
 
-    def __init__(self,espace):
+    def __init__(self,espace: Espace):
         super().__init__()
         self.columnconfigure(1,weight=1)
         self.rowconfigure(2,weight=1)
@@ -54,10 +58,10 @@ class Indices(Toplevel):
 
     # Radio bouton du choix d'algorithme.
     #
-    def __change_radio(self):
+    def __change_radio(self) -> None:
         self.afficheur.affiche_algo(self.__choix_techno.get())
 
-    def __save(self):
+    def __save(self) -> None:
         def fn_write(fich):
             with open(fich,"w") as f:
                 f.write(txt)
@@ -72,15 +76,15 @@ Sous-classe de Printer spécialisée pour écrire dans l'Afficheur 'aff. 'esp
 est le Espace traité.
 """
 class affPrinter(Printer):
-    def __init__(self,aff,esp):
+    def __init__(self,aff: Afficheur,esp: Espace):
         self.aff=aff
         super().__init__(esp)
         self.debligne=None # Pour le 1er appel à index().
 
-    def print(self,msg):
+    def print(self,msg: str):
         self.aff.text.insert(INSERT,msg)
 
-    def index(self,what,arg=None):
+    def index(self,what: int,arg: Optional[int] =None):
         aff=self.aff
         text=aff.text
         ici=text.index(INSERT)
@@ -158,7 +162,7 @@ class Afficheur(Frame):
 ##               "foncee":    "#c1e978"
 ##               }
 
-    def __init__(self,parent,collim):
+    def __init__(self,parent: Frame,collim: Checkbutton):
         super().__init__(parent)
         self.columnconfigure(1,weight=1)
         self.rowconfigure(1,weight=1)
@@ -183,7 +187,7 @@ class Afficheur(Frame):
         self.espace=None
         self.__choix_collim=collim
 
-    def destroy(self):
+    def destroy(self) -> None:
         del self.text,self.__vsb,self.__hsb,self.printer
         super().destroy()
 
@@ -193,7 +197,7 @@ class Afficheur(Frame):
     # (de racine tag_mcol et tag_mlg), rend le couple (tcol,tlg) des tags
     # correspondants. Sinon, rend None.
     #
-    def __get_collim_tags(self):
+    def __get_collim_tags(self) -> Optional[Tuple[str,str]]:
         tc=self.tag_mcol
         tl=self.tag_mlg
         mc=ml=mcl=None
@@ -208,7 +212,7 @@ class Afficheur(Frame):
     # tags sont rendus sous la forme de couples (a,b), où 'a est le nom du
     # tag et 'b vaut True pour un tag de colonne, False pour un tag de ligne.
     #
-    def __tags_collim(self):
+    def __tags_collim(self) -> Iterator[Tuple[str,bool]]:
         for t in self.text.tag_names():
             if t.startswith(self.tag_mcol):
                 yield (t,True)
@@ -217,14 +221,14 @@ class Afficheur(Frame):
 
     # La souris quitte l'afficheur -> on éteint le collimateur mobile.
     #
-    def __leave(self,ev):
+    def __leave(self,ev: Event) -> None:
         cur=self.__collimateur
         if cur is not None:
             self.text.tag_lower(cur[0])
             self.text.tag_lower(cur[1])
             self.__collimateur=None
 
-    def __survole(self,ev):
+    def __survole(self,ev: Event) -> None:
         if self.__choix_collim.get():
             mcl=self.__get_collim_tags()
             cur=self.__collimateur
@@ -246,7 +250,7 @@ class Afficheur(Frame):
 
     # ---------- Collimateur fixe.
 
-    def __show_fix_collim(self):
+    def __show_fix_collim(self) -> None:
         ftag=self.tag_fixe
         text=self.text
         for tag in self.__fix_collim:
@@ -261,7 +265,7 @@ class Afficheur(Frame):
         # propriétés à chaque création ici. L'affectation dans __set_colors1()
         # ne suffit pas.
 
-    def __clic(self,ev):
+    def __clic(self,ev: Event) -> None:
         mcl=self.__get_collim_tags()
         if mcl:
             ftag=self.tag_fixe
@@ -285,7 +289,7 @@ class Afficheur(Frame):
     # Crée le Printer self.printer, puis appelle affiche_algo() pour afficher
     # la table résultat.
     #
-    def affiche(self,esp,algo):
+    def affiche(self,esp: Espace,algo: int) -> None:
         from datetime import datetime
         self.espace=esp
         self.printer=affPrinter(self,esp)
@@ -308,7 +312,7 @@ class Afficheur(Frame):
     # doit déjà avoir été créé (self.printer) par affiche() (ne fait rien
     # sinon).
     #
-    def affiche_algo(self,algo):
+    def affiche_algo(self,algo: int) -> None:
         pr=self.printer
         if pr:
             xpos=self.__hsb.get()
@@ -350,7 +354,7 @@ class Afficheur(Frame):
     """
     Rend le texte contenu dans l'afficheur. Rend "" si non chargé.
     """
-    def gettext(self):
+    def gettext(self) -> str:
         return self.text.get("1.0",END)
 
     # ---------- Gestion des couleurs et polices.
@@ -358,12 +362,12 @@ class Afficheur(Frame):
     """
     Rend le dictionnaire des couleurs courantes.
     """
-    def get_colors(self):
+    def get_colors(self) -> Dict[str,str]:
         return self.couleurs
 
     # Affecte des propriétés des tags fixes.
     #
-    def __set_colors1(self):
+    def __set_colors1(self) -> None:
         tag_config=self.text.tag_config
         self.text.config(background=self.couleurs["fond"])
         tag_config("all",foreground="black",font=police1,relief=FLAT)
@@ -379,7 +383,7 @@ class Afficheur(Frame):
     # Affecte les propriétés des tags dynamiques. Cette fonction doit être
     # appelée après avoir créé les tags.
     #
-    def __set_colors2(self):
+    def __set_colors2(self) -> None:
         for t,col in self.__tags_collim():
             self.text.tag_config(t,relief=GROOVE,borderwidth=(2 if col else 4),
                             font=police2)
@@ -396,7 +400,7 @@ class Afficheur(Frame):
     Affecte la couleur de 'item (clé dans .couleurs) à la valeur 'coul, et
     réaffiche le contenu de la fenêtre.
     """
-    def set_color(self,item,coul):
+    def set_color(self,item: str,coul: str) -> None:
         self.couleurs[item]=coul
         self.__set_colors1()
         self.__set_colors2()
@@ -405,7 +409,7 @@ class Afficheur(Frame):
     Réinitialise la table des couleurs aux valeurs par défaut, et réaffiche le
     contenu de la fenêtre.
     """
-    def reinit_color(self):
+    def reinit_color(self) -> None:
         self.couleurs.update(self.def_couleurs)
         self.__set_colors1()
         self.__set_colors2()

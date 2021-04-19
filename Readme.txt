@@ -1,8 +1,11 @@
 
 This is the Limes package.
 
-Creation: 29 March 2021
+Creation: 29 March 2021 : v.2.0
 Author: Jacques Ducasse
+
+Versions :
+10 April 2012 : v.2.0.1
 
 Content
 -------
@@ -24,12 +27,17 @@ Thus, include the "limes" parent directory in PYTHONPATH, then :
 
 	% python -m limes
 
+See :
+	% python -m limes -hh
+for the complete command line syntax.
+
 Prerequisite
 ------------
 
 - Python version needed : 3.7 or above.
 
-- If you want to load .xls or .xlsx files, you need to install the "xlrd" package :
+- If you want to load .xls files, you need to install the "xlrd" package :
 	https://pypi.org/project/xlrd/
-	Note that in this case, Python version cannot be above 3.7.
 
+- If you want to load .xlsx files, you need to install the "openpyxl" package :
+	https://pypi.org/project/openpyxl/

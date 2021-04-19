@@ -1,3 +1,17 @@
+Limes v2.0.1
+------------	10/04/2021
+
+Ajout du type checking
+- Tous les modules non graphiques sont annotés pour type checking, et contrôlés par mypy.
+- Les modules faisant appels à tkinter ne sont pas type checkés pour le moment.
+
+Passage à la version 2.0.1 de xlrd, laquelle est plus compatible avec les versions
+récentes de Python, mais ne traite plus que les .xls et pas les .xlsx.
+En conséquence, ajout de l'utilisation de openpyxl pour les .xlsx. Ajout du reader
+calc.Reader_excelx.
+
+Ajout de l'option -h à la ligne de commande, et de la version anglaise (-hh) du texte d'aide.
+
 Limes v2.0
 ----------	29/03/2021
 

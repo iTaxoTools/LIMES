@@ -1,88 +1,160 @@
 
-## -*- coding:Latin-1 -*-
+from __future__ import annotations
 
-"""
-    % limes -I -m -n 'file...
-    % limes -O -n -c [-s 'sep] 'fmt ['titre] 'file...
-    % limes -C 'file
+usage_fr="""
+    % limes -I -m -n 'fich...
+    % limes -O -n -c [-s 'sep] 'fmt ['titre] 'fich...
+    % limes -C 'fich
     % limes
+    % limes -hh
 
-Dans la premiËre forme (-I), charge l'ensemble des fichier 'fich et affiche
-les indices calculÈs sur lensemble des mÈthodes.
+Dans la premi√®re forme (-I), charge l'ensemble des fichier 'fich et affiche
+les indices calcul√©s sur lensemble des m√©thodes.
 
-Dans la deuxiËme forme (-O), charge l'ensemble des fichiers 'fich et produit
-le fichier fusionnÈ au format 'fmt. 'fmt a l'une des valeurs suivantes :
+Dans la deuxi√®me forme (-O), charge l'ensemble des fichiers 'fich et produit
+le fichier fusionn√© au format 'fmt. 'fmt a l'une des valeurs suivantes :
     spart   Format Spart. Dans ce cas, le premier argument est le titre qui
-            sera stockÈ dans le bloc Project_name.
+            sera stock√© dans le bloc Project_name.
     csv     Format CSV.
 
-Dans la troisiËme forme (-C), contrÙle simplement le fichier 'file, et
+Dans la troisi√®me forme (-C), contr√¥le simplement le fichier 'fich, et
 affiche un message d'erreur si le fichier est invalide.
 
-Sans argument (quatriËme forme), lance l'interface graphique.
+Sans argument (quatri√®me forme), lance l'interface graphique.
 
-Par dÈfaut, si aucune des options -IOC n'est fournie et que des arguments sont
-prÈsents, l'option -C est prise en compte.
+Par d√©faut, si aucune des options -IOC n'est fournie et que des arguments sont
+pr√©sents, l'option -C est prise en compte.
 
-Dans tous les cas, le type du fichier est identifiÈ par l'extension :
+Dans tous les cas, le type du fichier est identifi√© par l'extension :
     .spart      Format Spart
     .xls, .xlsx Format Excel
     .csv        Format CSV
     <autre>     Limes tente d'identifier l'un des format mono-partition ABGD,
                 GMYC ou PTP.
 
-Dans le cas des fichiers CSV et Excel, l'extension peut Ítre suivie d'un
-complÈment aprËs un ':' :
-    - Pour un fichier CSV, il s'agit du sÈparateur. Exemple : "fichier.csv:;"
-        Le sÈparateur par dÈfaut est la virgule ','.
-    - Pour un fichier Excel, il s'agit du nom ou du numÈro (‡ compter de 1) de
+Dans le cas des fichiers CSV et Excel, l'extension peut √™tre suivie d'un
+compl√©ment apr√®s un ':' :
+    - Pour un fichier CSV, il s'agit du s√©parateur. Exemple : "fichier.csv:;".
+        Le s√©parateur par d√©faut est la virgule ','.
+    - Pour un fichier Excel, il s'agit du nom ou du num√©ro (√† compter de 1) de
         la feuille. Exemple : "fichier.xls:feuille2" ou "fichier.xls:2". Par
-        dÈfaut, la feuille numÈro 1 est prise en compte.
+        d√©faut, la feuille num√©ro 1 est prise en compte.
 
 Options :
     I   Calcule les indices (voir texte).
     O   Fusionne les fichiers et produit un fichier au format 'fmt (voir texte).
-    C   ProcËde simplement au contrÙle syntaxique du fichier 'file (voir texte).
-    m   Calcule et affiche les match ratio plutÙt que les cTax.
-    n   Normalise les noms des Èchantillons avant fusion.
-    c   Ne prend en compte que les Èchantillons communs ‡ toutes les mÈthodes
-        (Èventuellement aprËs normalisation si l'option -n est fournie). Option
-        forcÈe implicitement avec -I.
-    s   PrÈcise le sÈparateur 'sep. Seulement si 'fmt vaut "csv". Virgule par
-        dÈfaut.
+    C   Proc√®de simplement au contr√¥le syntaxique du fichier 'file (voir texte).
+    m   Calcule et affiche les match ratio plut√¥t que les cTax.
+    n   Normalise les noms des √©chantillons avant fusion.
+    c   Ne prend en compte que les √©chantillons communs √† toutes les m√©thodes
+        (√©ventuellement apr√®s normalisation si l'option -n est fournie). Option
+        forc√©e implicitement avec -I.
+    s   Pr√©cise le s√©parateur 'sep. Seulement si 'fmt vaut "csv". Virgule par
+        d√©faut.
+    h   Affiche cette aide. En anglais si r√©p√©t√©e.
+
+Auteur : J.Ducasse, f√©vrier 2019
+    modif. :
+        mars 2021 : changement complet du format de la ligne de commande
+            (options) ; ajout du format Spart.
+        avril 2021 : changement interne (utillisation de openpyxl, typing).
+            Ajout de l'option -h.
+"""
+
+usage_en="""
+    % limes -I -m -n 'file...
+    % limes -O -n -c [-s 'sep] 'fmt ['title] 'file...
+    % limes -C 'file
+    % limes
+    % limes -hh
+
+In the first form (-I), loads the set of 'file files and displays the indices
+calculated on all the methods.
+
+In the second form (-O), loads all the 'file files and produces the merged file
+in 'fmt format. 'fmt has one of the following values:
+    spart   Spart format. In this case, the first argument 'title is the title
+            which will be stored in the Project_name block.
+    csv     CSV format.
+
+In the third form (-C), simply checks the 'file file, and displays an error
+message if the file is invalid.
+
+Without argument (fourth form), launches the graphical interface.
+
+By default, if none of the -IOC options are provided and arguments are present,
+the -C option is taken into account.
+
+In all cases, the file type is identified by the extension:
+    .spart      Spart format
+    .xls, .xlsx Excel format
+    .csv        CSV format
+    <other>     Limes attempts to identify one of the single-partition formats
+                ABGD, GMYC or PTP.
+
+In the case of CSV and Excel files, the extension can be followed by a
+complement after a ':':
+    - For a CSV file, this is the separator. Example: "file.csv:;".
+        The default separator is the comma ','.
+    - For an Excel file, it is the name or the number (starting from 1) of the
+        sheet. Example : "file.xls:sheet2" or "file.xls:2". By default, the
+        sheet number 1 is taken into account.
+
+Options :
+    I   Calculates the indices (see text).
+    O   Merges the files and produces a file in 'fmt format (see text).
+    C   Simply performs a syntax check of the file 'file (see text).
+    m   Calculates and displays match ratios instead of cTax.
+    n   Normalizes sample names before merging.
+    c   Only takes into account samples common to all methods (possibly after
+        normalization if the -n option is provided). Option forced implicitly
+        with -I.
+    s   Specifies the separator 'sep. Only if 'fmt is 'csv'. Comma by default.
+    h   Displays this help. In English if repeated.
+
+Author: J.Ducasse, feb 2019
+    modif.:
+        march 2021: complete change of the command line format (options); added
+            Spart format.
+        april 2021: internal change (use of openpyxl, typing). Added -h
+            option.
 """
 
 import sys,getopt,os.path
 # Noter que les messages du programme sont bilingues, mais que celui-ci
-# n'offre aucun moyen de changer la langue par dÈfaut !
+# n'offre aucun moyen de changer la langue par d√©faut !
 
-from . import limes
+from . import core
 from .kagedlib import print_error
-from .limes import get_text
+from .core import get_text,set_langue
 
-def usage(arg=None):
+from typing import List,Optional,Tuple,TYPE_CHECKING,Union
+
+def usage(arg: Optional[Exception]=None) -> None:
     if isinstance(arg,Exception):
         print_error(arg)
     print("Usage: limes -I -m -n 'file...\n"
           "       limes -O -n -c [-s 'sep] 'fmt ['titre] 'file...\n"
           "       limes -C 'file\n"
-          "       limes",
+          "       limes\n"
+          "       limes -hh",
           file=sys.stderr)
     sys.exit(1)
 
-limes.set_langue(1)
+set_langue(1)
 
 """
-Rend le triplet (a,b,c) o˘ 'a est le path complet du fichier, 'b son type
-("spart", "csv", "excel" ou ""), et 'c la donnÈes extra suivant le ':' (None
-si pas de donnÈe extra ou si type autre que "csv" ou "excel").
-GÈnËre une exception si une donnÈes extra est donnÈe pour un fichier autre
+Rend le triplet (a,b,c) o√π 'a est le path complet du fichier, 'b son type
+("spart", "csv", "excel" ou ""), et 'c la donn√©es extra suivant le ':' (None
+si pas de donn√©e extra ou si type autre que "csv", "excel" ou "excelx").
+G√©n√®re une exception si une donn√©es extra est donn√©e pour un fichier autre
 que csv ou excel.
 """
-def arg2type(file):
+def arg2type(file: str) -> Tuple[str,str,Optional[str]]:
     dir,fich=os.path.split(file)
     nom,ext=os.path.splitext(fich)
     a,dp,b=ext.partition(':')
+    extra: Optional[str]
     if dp:
         ext=a
         extra=b
@@ -91,7 +163,8 @@ def arg2type(file):
         extra=None
     ext2=ext.lower()
     if ext2==".csv": type="csv"
-    elif ext2 in (".xls",".xlsx"): type="excel"
+    elif ext2==".xls": type="excel"
+    elif ext2==".xlsx": type="excelx"
     else:
         if dp:
             raise SyntaxError(
@@ -103,12 +176,13 @@ def arg2type(file):
     return (os.path.join(dir,fich),type,extra)
 
 """
-Lit le fichier 'fich et rend la Source correspondant. Celle-ci est chargÈe.
-Le type est dÈterminÈ par l'extension, Èventuellement complÈtÈe de son extra.
-GÈnËre une exception si erreur.
+Lit le fichier 'fich et rend la Source correspondant. Celle-ci est charg√©e.
+Le type est d√©termin√© par l'extension, √©ventuellement compl√©t√©e de son extra.
+G√©n√®re une exception si erreur.
 """
-def load(fich):
+def load(fich: str) -> core.Source:
     fich,type,extra=arg2type(fich)
+    src: core.Source
     if type=="csv":
         from . import calc
         if extra is None: extra=','
@@ -116,14 +190,18 @@ def load(fich):
     elif type=="spart":
         from . import spart
         src=spart.Reader_spart(fich)
-    elif type=="excel":
+    elif type in ("excel","excelx"):
         from . import calc
+        eextra: Union[int,str]
         if extra is None:
-            extra=0
+            eextra=0
         else:
-            try: extra=int(extra)-1
-            except: pass
-        src=calc.Reader_excel(fich,extra)
+            try: eextra=int(extra)-1
+            except: eextra=extra
+        if type=="excel":
+            src=calc.Reader_excel(fich,eextra)
+        else:
+            src=calc.Reader_excelx(fich,eextra)
     else:
         from . import monofmt
         src=monofmt.Reader_monofmt(fich)
@@ -131,68 +209,75 @@ def load(fich):
     return src
 
 """
-'args est une liste d'arguments donnant les fichiers ‡ charger. Charge tous
-les fichiers par load(), et crÈe et rend l'Espace intÈgrant toutes leurs
-mÈthodes. Les noms des Èchantillons sont normalisÈs si 'norm vaut True. Les
-Èchantillons sont rÈduits aux communs si 'common vaut True.
-GÈnËre une exception si erreur.
+'args est une liste d'arguments donnant les fichiers √† charger. Charge tous
+les fichiers par load(), et cr√©e et rend l'Espace int√©grant toutes leurs
+m√©thodes. Les noms des √©chantillons sont normalis√©s si 'norm vaut True. Les
+√©chantillons sont r√©duits aux communs si 'common vaut True.
+G√©n√®re une exception si erreur.
 """
-def make_espace(args,norm,common):
-    meths=[]
+def make_espace(args: List[str],norm: bool,common: bool) -> core.Espace:
+    meths: List[core.Methode] =[]
     for f in args:
         meths.extend(load(f).methodes)
-    return limes.Espace(meths,common=common,strict=not norm)
+    return core.Espace(meths,common=common,strict=not norm)
 
-def run_indices(args,algo,norm):
+def run_indices(args: List[str],algo: int,norm: bool) -> None:
     espace=make_espace(args,norm,True)
-    pr=limes.Printer(espace)
+    pr=core.Printer(espace)
     print()
     if pr.pralias():
         print()
-    fn=pr.prmratio if algo==limes.ALGO_MRATIO else pr.prtable
+    fn=pr.prmratio if algo==core.ALGO_MRATIO else pr.prtable
     fn(True)
     print()
     fn(False)
 
-def run_controle(fich):
+def run_controle(fich: str) -> None:
     src=load(fich)
-    print(get_text("Type %s ; %d partitions ; %d Èchantillons",
+    print(get_text("Type %s ; %d partitions ; %d √©chantillons",
                    "Type %s ; %d partitions ; %d samples")%
                   (src.type,len(src.methodes),len(src.echantillons)))
 
-def run_exporte_spart(args,titre,norm,common):
+def run_exporte_spart(args: List[str],titre: str,norm: bool,common: bool) \
+                                                                    -> None:
     from . import spart
     espace=make_espace(args,norm,common)
     spart.Writer_spart(sys.stdout,titre,espace)
 
-def run_exporte_csv(args,norm,common,separ):
+def run_exporte_csv(args: List[str],norm: bool,common: bool,separ: str) -> None:
     from . import calc
     espace=make_espace(args,norm,common)
     calc.Writer_csv(sys.stdout,espace,separ)
 
 def run_interface():
     try:
-        from . import wlimes
+        if TYPE_CHECKING:
+            pass
+            # Les modules d√©pendant de tkinter ne sont pas type-check√©s.
+        else:
+            from . import wlimes
     except ImportError:
         usage()
 
 ##import pdb
 ##pdb.set_trace()
 
-algo=limes.ALGO_CTAX
+algo=core.ALGO_CTAX
 try:
-    opt,arg=getopt.getopt(sys.argv[1:],"IOCmncs:")
+    opt,arg=getopt.getopt(sys.argv[1:],"IOCmncs:h")
 except getopt.GetoptError as e:
     usage(e)
 opt_IOC=None
 opt_c=opt_m=opt_n=opt_s=False
 separ=","
+opt_h=0
 for o,a in opt:
     if o=="-m":
-        algo=limes.ALGO_MRATIO
+        algo=core.ALGO_MRATIO
         opt_m=True
     elif o=="-n": opt_n=True
     elif o=="-c": opt_c=True
+    elif o=="-h": opt_h+=1
     elif o=="-s":
         if len(a)!=1: usage()
         separ=a
@@ -200,6 +285,11 @@ for o,a in opt:
     else:
         if opt_IOC and opt_IOC!=o: usage()
         opt_IOC=o
+
+if opt_h>0:
+    print(usage_fr if opt_h==1 else usage_en)
+    sys.exit(0)
+
 if len(arg)==0:
     if opt: usage()
     run_interface()

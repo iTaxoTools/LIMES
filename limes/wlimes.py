@@ -4,11 +4,13 @@ from tkinter.ttk import *
 from tkinter.filedialog import (asksaveasfilename,askopenfilenames)
 from tkinter.messagebox import showerror,showinfo
 import os.path,weakref,sys
-from . import limes,kagedlib
-from .limes import get_text
+from . import core,kagedlib
+from .core import get_text
 
-num_version="2.0"
-date_version="07/03/2021"
+num_version="2.0.1"
+date_version="10/04/2021"
+
+OnMac=sys.platform=="darwin"
 
 # -- Messages multilingues ------------
 
@@ -62,7 +64,7 @@ correspondant à cette langue pour tous les widgets enregistrés par
 enregistre().
 """
 def change_langue():
-    limes.set_langue(select_langue.get())
+    core.set_langue(select_langue.get())
     for w,(i,msgs) in msg_widgets.items():
         set_langue_widget(w,i,msgs)
 
@@ -98,7 +100,7 @@ class Popup(Frame):
         self.master.destroy()
 
 import sys
-if sys.platform=="darwin":
+if OnMac:
     police1=("Courier","12")
     police2=("Courier","12","bold")
 else:
@@ -179,13 +181,19 @@ def loader_excel(ws):
     src.load()
     return src
 
+def loader_excelx(ws):
+    from . import calc
+    src=calc.Reader_excelx(ws.fich,ws.extra.feuille)
+    src.load()
+    return src
+
 def loader_dflt(ws):
     from . import monofmt
     return monofmt.Reader_monofmt(ws.fich)
 
 loader={
     ".xls":     loader_excel,
-    ".xlsx":    loader_excel,
+    ".xlsx":    loader_excelx,
     ".spart":   loader_spart,
     ".csv":     loader_csv
     }
@@ -210,9 +218,10 @@ class extra_csv:
         ("espace","space"," ")
         )
 
-    def __init__(self):
+    def __init__(self,fn=None):
         self.__var=IntVar(value=0)
         self.actif=ACTIVE
+        self.fn=fn
 
     @property
     def separ(self):
@@ -225,9 +234,12 @@ class extra_csv:
     def __call__(self,ev):
         menu=Menu(ev.widget,tearoff=0)
         for i,(a,b,_) in enumerate(self.__separ):
-            menu.add_radiobutton(label=get_text(a,b),variable=self.__var,
-                                 value=i,state=self.actif)
-        menu.post(ev.x_root,ev.y_root)
+            label=get_text(a,b)
+            menu.add_radiobutton(label=label,variable=self.__var,
+                                 value=i,state=self.actif,
+                                 command=(lambda l=label: self.fn(l,ev)
+                                          if self.fn else None))
+        menu.tk_popup(ev.x_root,ev.y_root)
 
 """
 Crée le menu permettant de sélectionner la feuille Excel. Le menu est affiché
@@ -241,9 +253,11 @@ L'instance dispose des attributs suivants :
                 tionnés.
 """
 class extra_xls:
-    def __init__(self,ws):
+    __sheets=None
+
+    def __init__(self,ws,ext):
         self.__fich=ws.fich
-        self.__sheets=None
+        self.__ext=ext
         self.__var=IntVar(value=0)
         self.actif=ACTIVE
 
@@ -253,19 +267,23 @@ class extra_xls:
 
     def __call__(self,ev):
         if self.__sheets is None:
-            import xlrd
             try:
-                xl=xlrd.open_workbook(self.__fich,on_demand=True)
-                self.__sheets=xl.sheet_names()
+                from . import calc
+                if self.__ext==".xls":
+                    self.__sheets=calc.Reader_excel.get_sheets(self.__fich)
+                else:
+                    self.__sheets=calc.Reader_excelx.get_sheets(self.__fich)
             except:
-                aff_erreur(("Ne peut lire le fichier Excel",
-                            "Cannot read the Excel file"))
+##                import traceback
+##                traceback.print_exc()
+                aff_erreur(("Ne peut lire la liste des feuilles du fichier Excel",
+                            "Cannot read the sheets list of the Excel file"))
                 return
         menu=Menu(ev.widget,tearoff=0)
         for i,sh in enumerate(self.__sheets):
             menu.add_radiobutton(label=sh,variable=self.__var,value=i,
                                  state=self.actif)
-        menu.post(ev.x_root,ev.y_root)
+        menu.tk_popup(ev.x_root,ev.y_root)
 
 """
 wSource(parent,row,fich)
@@ -302,7 +320,7 @@ class wSource():
         if ext==".csv":
             self.extra=extra_csv()
         elif ext in (".xls",".xlsx"):
-            self.extra=extra_xls(self)
+            self.extra=extra_xls(self,ext)
         else:
             self.extra=None
         if self.extra:
@@ -408,8 +426,10 @@ class wSource():
                     Checkbutton(subfr,variable=var,command=self.__clicsub).\
                                                         grid(row=i,column=1)
                     Label(subfr,text=len(m)).grid(row=i,column=2)
-                    Label(subfr,text=m.nom).grid(row=i,column=3,sticky=W,
-                                                 padx=(5,0))
+                    t=m.nom
+                    if OnMac and can:
+                        t+=" "*100 # pour remplir le Canvas par le Frame
+                    Label(subfr,text=t).grid(row=i,column=3,sticky=W,padx=(5,0))
                 if can:
                     subfr.update_idletasks()
                     wc=can.winfo_width()
@@ -455,10 +475,12 @@ class win_exporte(Popup):
                                 grid(row=i,column=1,sticky=W,padx=(5,10),pady=5)
         self.titre=Entry(fr,width=50)
         self.titre.grid(row=0,column=2,sticky=EW)
-        self.extra=extra_csv()
-        w=Label(fr,text=self.extra.text)
+
+        w=Label(fr)
+        self.extra=extra_csv(lambda label,ev: ev.widget.config(text=label))
+        w.config(text=self.extra.text)
         w.grid(row=1,column=2,sticky=W)
-        w.bind("<Button-1>",self.__getsepar)
+        w.bind("<Button-1>",self.extra)
 
         fr=Frame(self)
         fr.grid(row=2,column=1,sticky=EW)
@@ -469,41 +491,9 @@ class win_exporte(Popup):
         Button(fr,text=get_text("Quitter","Quit"),command=self.quit).\
                                     grid(row=1,column=1,sticky=SE)
 
-##    def init_popup(self,esp):
-##        self.esp=esp
-##        self.grid(padx=5,pady=5)
-##        Button(self,text=get_text("Fichier","Browse"),
-##               command=self.__choose_file).grid(row=1,column=1)
-##        self.fich=Label(self)
-##        self.fich.grid(row=1,column=2,sticky=W,padx=(10,0))
-##        Label(self,text=get_text("Titre :","Title:")).\
-##                                        grid(row=2,column=1,pady=10,sticky=E)
-##        self.titre=Entry(self,width=50)
-##        self.titre.grid(row=2,column=2,sticky=EW)
-##
-##        fr=Frame(self)
-##        fr.grid(row=3,column=1,columnspan=2,sticky=EW)
-##        fr.columnconfigure((2,4),weight=1,uniform=1)
-##        self.format=StringVar(value="spart")
-##        for i,f in enumerate(("spart","csv")):
-##            Radiobutton(fr,text=f,variable=self.format,value=f).\
-##                                    grid(row=i,column=1,sticky=W,padx=5)
-##        self.extra=extra_csv()
-##        w=Label(fr,text=self.extra.text)
-##        w.grid(row=1,column=2,sticky=W)
-##        w.bind("<Button-1>",self.__getsepar)
-##        Button(fr,text=get_text("Enregistrer","Save"),command=self.__save).\
-##                                    grid(row=0,column=3,rowspan=2,sticky=NS)
-##        Button(fr,text=get_text("Quitter","Quit"),command=self.quit).\
-##                                    grid(row=1,column=5)
-
-    def __getsepar(self,ev):
-        self.extra(ev)
-        self.after(10,lambda: ev.widget.config(text=self.extra.text))
-        # On ne peut mettre à jour le libellé dans la fonction __getsepar()
-        # elle-même, car la IntVar de .extra n'est affectée à la valeur
-        # sélectionnée qu'au retour de l'événement (elle n'est pas encore à
-        # jour au retour du call self.extra()) !
+    def destroy(self):
+        del self.titre
+        super().destroy()
 
     def __save(self):
 
@@ -523,29 +513,6 @@ class win_exporte(Popup):
                 return
         if save_file(self,fmt,"."+fmt,fn_write):
             self.quit()
-                
-##    def __save(self):
-##        fich=self.fich.cget("text")
-##        if fich:
-##            fmt=self.format.get()
-##            try:
-##                if fmt=="spart":
-##                    from . import spart
-##                    titre=self.titre.get().strip()
-##                    if titre:
-##                        spart.Writer_spart(fich,titre,self.esp)
-##                    else:
-##                        aff_erreur(("Titre obligatoire","Title mandatory"))
-##                        return
-##                else:
-##                    from . import calc
-##                    calc.Writer_csv(fich,self.esp,self.extra.separ)
-##            except:
-##                aff_erreur()
-##            else:
-##                showinfo(message=
-##                         get_text("Fichier %s enregistré","File %s saved")%fmt)
-##                self.quit()
 
     def __choose_file(self):
         fmt=self.format.get()
@@ -742,7 +709,7 @@ photoPython=make_image(photoPython)
 photoMicroicon=make_image(photoMicroicon)
 del make_image
 
-select_langue=IntVar(value=limes.set_langue(DEF_LANG))
+select_langue=IntVar(value=core.set_langue(DEF_LANG))
 
 # -- Menu Aide ------------
 
@@ -761,34 +728,39 @@ class affiche_apropos(Popup):
         f.config(weight='bold',size=8)
         w.config(font=f)
         Label(fr,image=photoLogo).grid(row=1,column=1)
-        Label(self,text="version %s - %s\n\n"
-              "%s :\n\n"
-              "Jacques Ducasse\n"
-              "Aurélien Miralles\n"
-              "Visotheary Ung\n\n----" %
-                          (num_version,date_version,
-                           get_text("Conception et développement",
-                                    "Conception and development")),
-              justify=CENTER).\
-              grid(row=3,column=1,pady=10)
+
+        txt="""version %s - %s
+
+%s :
+
+Jacques Ducasse
+Aurélien Miralles
+Visotheary Ung
+
+----""" %       (num_version,date_version,
+                 get_text("Conception et développement",
+                          "Conception and development"))
+        Label(self,text=txt,justify=CENTER).grid(row=3,column=1,pady=10)
         fr=Frame(self)
         fr.grid(row=4,column=1)
-        installer="PyInstaller"
-        installer_web="https://www.pyinstaller.org"
-##        installer="py2exe"
-##        installer_web="https://pypi.python.org/pypi/py2exe"
-        Label(fr,text="%s Python v.%d.%d :\n"
-              "http://www.python.org\n"
-              "%s xlrd %s %s :\n"
-              "https://pypi.python.org/pypi/xlrd\n"
-              "%s" %
-                          (get_text("développé en","developed with"),
-                           sys.version_info.major,sys.version_info.minor,
-                           get_text("utilise les modules","uses the modules"),
-                           get_text("et","and"),
-                           installer,installer_web),
-              justify=RIGHT).\
-              grid(row=1,column=1,padx=(0,5))
+        txt="""%s Python v.%d.%d :
+http://www.python.org
+
+%s xlrd %s openpyxl :
+https://pypi.python.org/pypi/xlrd
+https://pypi.python.org/pypi/openpyxl""" % \
+                (get_text("développé en","developed with"),
+                 sys.version_info.major,sys.version_info.minor,
+                 get_text("utilise les modules","uses the modules"),
+                 get_text("et","and"))
+        if getattr(sys,'frozen',False) and hasattr(sys, '_MEIPASS'):
+            txt+="""
+
+%s PyInstaller :
+https://www.pyinstaller.org""" % \
+                get_text("version exécutable faite avec",
+                         "executable version built with")
+        Label(fr,text=txt,justify=RIGHT).grid(row=1,column=1,padx=(0,5))
         Label(fr,image=photoPython).grid(row=1,column=2,sticky=N)
         Button(self,text=get_text("Fermer","Quit"),command=self.quit).\
                     grid(row=5,column=1,pady=(15,5))
@@ -974,14 +946,23 @@ class Main(Frame):
         if not lst:
             raise ValueError(get_text("Aucune méthode sélectionnée",
                                       "No selected methods"))
-        return limes.Espace(lst,**opt)
+        return core.Espace(lst,**opt)
 
-main=Main(fen)
+if OnMac:
+    # Pour éviter la marge blanche
+    fen2=Frame(fen)
+    fen2.grid()
+    main=Main(fen2)
+else:
+    main=Main(fen)
 main.grid(row=2,column=1,padx=5,pady=5,sticky=NSEW)
 
 # -- Tableau de contrôle ------------
 
-ctrlpanel=Frame(fen)
+if OnMac:
+    ctrlpanel=Frame(fen2)
+else:
+    ctrlpanel=Frame(fen)
 ctrlpanel.grid(row=1,column=1,pady=5,sticky=EW)
 ctrlpanel.columnconfigure(10,weight=1)
 

@@ -1,92 +1,89 @@
 
-## -*- coding:Latin-1 -*-
+from __future__ import annotations
 
 """
-Ensemble des fonctions chargées de la lecture des fichiers mono-méthode :
+Ensemble des fonctions chargÃ©es de la lecture des fichiers mono-mÃ©thode :
 ABGD, PTP, GYMC.
 
-Leur chargement produit un objet Espace, qui est traité normalement par les
+Leur chargement produit un objet Espace, qui est traitÃ© normalement par les
 fonctions du module "limes".
 """
 
 import os,re
-from .limes import (Methode,Echantillon,get_text,Espace,Source,
-                    RedundantNameError,EmptyMethodError)
+from .core import (Methode,Echantillon,get_text,Espace,Source,
+                   RedundantNameError,EmptyMethodError)
+
+from typing import List,Iterator
 
 class UnknownFormatError(Exception):
     pass
-
-##class RedondantSpecimenError(ValueError):
-##    pass
-
-##class EmptyMethodError(ValueError):
-##    pass
 
 """
 monofmt_ctxt(source)
 
 Gestionnaire de contexte pour la lecture des fichiers mono-format. 'source est
-l'instance de Source à charger.
+l'instance de Source Ã  charger.
 
-Le contexte rendu à l'ouverture est itérable ; chaque itération donne une ligne
-du fichier, non stripée ; les lignes blanches sont éliminées. L'utilisateur doit
+Le contexte rendu Ã  l'ouverture est itÃ©rable ; chaque itÃ©ration donne une ligne
+du fichier, non stripÃ©e ; les lignes blanches sont Ã©liminÃ©es. L'utilisateur doit
 renseigner les attributs .echantillons, .codesespeces et .nom. A la sortie du
-contexte, .meth contient la Methode créée.
+contexte, .meth contient la Methode crÃ©Ã©e.
 
     .echantillons
-            Liste des Echantillon de la méthode. La liste est vide à l'ouverture
-            du contexte ; l'utilisateur doit y insérer les Echantillon.
+            Liste des Echantillon de la mÃ©thode. La liste est vide Ã  l'ouverture
+            du contexte ; l'utilisateur doit y insÃ©rer les Echantillon.
     .codesespeces
-            Liste des codes espèces associés à l'Echantillon de même indice
-            dans .echantillons. La liste est vide à l'ouverture du contexte ;
-            l'utilisateur doit y insérer les codes en même temps qu'il
+            Liste des codes espÃ¨ces associÃ©s Ã  l'Echantillon de mÃªme indice
+            dans .echantillons. La liste est vide Ã  l'ouverture du contexte ;
+            l'utilisateur doit y insÃ©rer les codes en mÃªme temps qu'il
             renseigne .echantillons.
-    .nom    Nom de la méthode. None à l'ouverture du contexte, doit être
-            renseigné par l'utilisateur.
-    .numlg  Le numéro de la dernière ligne lue.
-    .meth   La Methode créée ; cet attribut est affecté à la sortie du contexte.
+    .nom    Nom de la mÃ©thode. Absent Ã  l'ouverture du contexte, doit Ãªtre
+            renseignÃ© par l'utilisateur.
+    .numlg  Le numÃ©ro de la derniÃ¨re ligne lue.
+    .meth   La Methode crÃ©Ã©e ; cet attribut est affectÃ© Ã  la sortie du contexte.
 
-L'entrée du contexte génère une exception OSError si le fichier ne peut être
+L'entrÃ©e du contexte gÃ©nÃ¨re une exception OSError si le fichier ne peut Ãªtre
 ouvert.
 
-La sortie du contexte procède aux contrôles suivants :
-    - Vérifie qu'il n'y a pas d'Echantillon redondants (de même nom).
+La sortie du contexte procÃ¨de aux contrÃ´les suivants :
+    - VÃ©rifie qu'il n'y a pas d'Echantillon redondants (de mÃªme nom).
 
-En cas d'erreur, le bloc exécuté doit générer une exception SyntaxError si le
+En cas d'erreur, le bloc exÃ©cutÃ© doit gÃ©nÃ©rer une exception SyntaxError si le
 fichier n'a pas la bonne syntaxe, ValueError si son contenu est invalide,
 d'un autre type (OSError notamment) sinon.
 
-Si erreur, la sortie du contexte génère une exception :
-    - du même type que celle produite par le bloc exécuté, si celui-ci a
-        généré une exception OSError ou ValueError.
-    - SyntaxError si celui-ci a généré une exception d'un autre type.
+Si erreur, la sortie du contexte gÃ©nÃ¨re une exception :
+    - du mÃªme type que celle produite par le bloc exÃ©cutÃ©, si celui-ci a
+        gÃ©nÃ©rÃ© une exception OSError ou ValueError.
+    - SyntaxError si celui-ci a gÃ©nÃ©rÃ© une exception d'un autre type.
     - RedundantNameError si la Methode produite comporte des Echantillon
         redondants.
-    - EmptyMethodError si la Methode comprend zéro échantillons.
+    - EmptyMethodError si la Methode comprend zÃ©ro Ã©chantillons.
 Dans tous les cas, le message de l'exception produite comprend le nom du
-fichier et son type, l'exception __cause__ donnant le détail (l'exception
+fichier et son type, l'exception __cause__ donnant le dÃ©tail (l'exception
 produite par le bloc dans le premier cas).
 """
 class monofmt_ctxt:
+    nom: str
+
     def __init__(self,source):
         self.source=source
 
-    def __enter__(self):
+    def __enter__(self) -> monofmt_ctxt:
         self.f=open(self.source.fich)
-        self.echantillons=[]
-        self.codesespeces=[]
-        self.nom=None
+        self.echantillons: List[Echantillon] =[]
+        self.codesespeces: List[int] =[]
         return self
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[str]:
         for self.numlg,lg in enumerate(self.f,start=1):
             if lg.strip():
                 yield lg.rstrip('\n')
-                # La ligne rendue n'est pas stripée, car on peut avoir besoin
-                # de tab en tête par exemple (voir PTP). On enlève quand même
+                # La ligne rendue n'est pas stripÃ©e, car on peut avoir besoin
+                # de tab en tÃªte par exemple (voir PTP). On enlÃ¨ve quand mÃªme
                 # le \n !
 
-    def __exit__(self,a,exc,c):
+    def __exit__(self,a,exc,c) -> None:
         self.f.close()
         if exc is not None:
             newexc=type(exc) \
@@ -100,7 +97,7 @@ class monofmt_ctxt:
                                      "Empty file, no specimen"))
             elif len(self.echantillons)!=len(set(self.echantillons)):
                 exc=RedundantNameError(
-                            get_text("Présence de spécimens redondants",
+                            get_text("PrÃ©sence de spÃ©cimens redondants",
                                      "Redondant specimens"))
             else:
                 self.meth=Methode(self.nom,self.echantillons,self.codesespeces,
@@ -112,45 +109,45 @@ class monofmt_ctxt:
                      (self.source.type,self.source.fich)) from exc
 
 """
-Tous les reader pour fichier mono-méthode ont la même structure, en utilisant
+Tous les reader pour fichier mono-mÃ©thode ont la mÃªme structure, en utilisant
 le gestionnaire de contexte 'monofmt_ctxt.
 
-La liste .methodes de l'instance chargée par .load() comprend toujours une
+La liste .methodes de l'instance chargÃ©e par .load() comprend toujours une
 seule Methode.
 
-En cas d'erreur, .load() elle génère une exception :
-    - OSError si le fichier ne peut être lu.
+En cas d'erreur, .load() elle gÃ©nÃ¨re une exception :
+    - OSError si le fichier ne peut Ãªtre lu.
     - SyntaxError si le fichier n'a pas la bonne syntaxe.
     - ValueError si le fichier a une syntaxe correcte mais comprend une
-        incohérence interne.
-Dans les deux derniers cas, .__cause__ donne le détail de l'erreur.
+        incohÃ©rence interne.
+Dans les deux derniers cas, .__cause__ donne le dÃ©tail de l'erreur.
 """
 
 """
-Rend le message (localisé) correspondant à 'msg :
-    0   Ligne mal formée.
+Rend le message (localisÃ©) correspondant Ã  'msg :
+    0   Ligne mal formÃ©e.
     1   Ligne non attendue.
-Le message inclut le numéro de ligne 'numlg.
+Le message inclut le numÃ©ro de ligne 'numlg.
 """
-def _get_msg(msg,numlg):
+def _get_msg(msg: int,numlg: int) -> str:
     if msg==0:
-        msg=get_text("ligne %d mal formée","line %d malformed")
+        mmsg=get_text("ligne %d mal formÃ©e","line %d malformed")
     elif msg==1:
-        msg=get_text("ligne %d non attendue","line %d unexpected")
-    return msg%numlg
+        mmsg=get_text("ligne %d non attendue","line %d unexpected")
+    return mmsg%numlg
 
 """
 Reader pour le fichier 'fich de format ABGD.
-Génère une exception OSError, SyntaxError ou ValueError sinon.
+GÃ©nÃ¨re une exception OSError, SyntaxError ou ValueError sinon.
 """
 class Reader_abgd(Source):
     type="ABGD"
 
-    def __init__(self,fich):
+    def __init__(self,fich: str):
         self.fich=fich
 
-    def load(self):
-        if self.methodes is None:
+    def load(self) -> List[Methode]:
+        if not hasattr(self,"methodes"):
             rex1=re.compile(r"\s*Group\s*\[",re.IGNORECASE)
             rex2=re.compile(r"\s*(?P<species>\d+)\s*\]\s*"
                             r"n\s*:\s*(?P<nb>\d+)\s*;\s*id\s*:"
@@ -176,7 +173,7 @@ class Reader_abgd(Source):
                         if len(lst)!=nb:
                             raise ValueError(
                                 get_text(
-                        "ligne %d : le nombre de spécimens %d ne correspond pas (n:%d)",
+                        "ligne %d : le nombre de spÃ©cimens %d ne correspond pas (n:%d)",
                         "line %d: unmatching specimens number %d (n:%d)")%
                                 (f.numlg,len(lst),nb))
                         for ech in lst:
@@ -195,17 +192,17 @@ Comme Reader_abgd() pour le format PTP.
 class Reader_ptp(Source):
     type="PTP"
 
-    def __init__(self,fich):
+    def __init__(self,fich: str):
         self.fich=fich
 
-    def load(self):
-        if self.methodes is None:
+    def load(self) -> List[Methode]:
+        if not hasattr(self,"methodes"):
             rex1=re.compile(r"\s*Species\s+(?P<species>\d+)\s*\(",re.IGNORECASE)
             rex2=re.compile(r"[^)]*\)\s*")
             with monofmt_ctxt(self) as f:
                 f.nom=os.path.splitext(os.path.basename(self.fich))[0]
                 entete=True
-                esp=None # True après une ligne "Species".
+                esp=None # True aprÃ¨s une ligne "Species".
                 codesp=set()
                 for lg in f:
                     ma=rex1.match(lg)
@@ -215,7 +212,7 @@ class Reader_ptp(Source):
                                 raise SyntaxError(_get_msg(1,f.numlg))
                             for ech in re.split(r"\s*,\s*",lg.strip()):
                                 if not ech:
-                                    # Deux ',' contigües, ou ',' en tête ou en queue.
+                                    # Deux ',' contigÃ¼es, ou ',' en tÃªte ou en queue.
                                     # Supprime aussi le cas d'une liste vide.
                                     raise SyntaxError(_get_msg(0,f.numlg))
                                 f.echantillons.append(Echantillon(ech))
@@ -231,7 +228,7 @@ class Reader_ptp(Source):
                             esp=int(ma.group("species"))
                             if esp in codesp:
                                 raise ValueError(get_text(
-                                    "ligne %d : espèce %d redondante",
+                                    "ligne %d : espÃ¨ce %d redondante",
                                     "line %d: redundant species %d")%
                                                  (f.numlg,esp))
                             codesp.add(esp)
@@ -248,11 +245,11 @@ Comme Reader_abgd() pour le format GMYC.
 class Reader_gmyc(Source):
     type="GMYC"
 
-    def __init__(self,fich):
+    def __init__(self,fich: str):
         self.fich=fich
 
-    def load(self):
-        if self.methodes is None:
+    def load(self) -> List[Methode]:
+        if not hasattr(self,"methodes"):
             rex1=re.compile(r"\s*##\s*GMYC_spec\s+sample_name\s*",re.IGNORECASE)
             rex2=re.compile(r"\s*##\s*\d+\s+(?P<species>\d+)\s+(?P<specimen>\S.*)")
             with monofmt_ctxt(self) as f:
@@ -267,12 +264,12 @@ class Reader_gmyc(Source):
                         if ma is None:
                             raise SyntaxError(_get_msg(0,f.numlg))
                         f.echantillons.append(Echantillon(ma.group("specimen").strip()))
-                        # On est sûr que le nom du spécimen n'est pas vide, et est
-                        # stripé des deux côtés. Par contre, il peut contenir des
+                        # On est sÃ»r que le nom du spÃ©cimen n'est pas vide, et est
+                        # stripÃ© des deux cÃ´tÃ©s. Par contre, il peut contenir des
                         # blancs.
                         f.codesespeces.append(int(ma.group("species")))
                 if entete:
-                    raise SyntaxError(get_text("Ligne d'en-tête absente",
+                    raise SyntaxError(get_text("Ligne d'en-tÃªte absente",
                                                "No header"))
             self.methodes=[f.meth]
             self.echantillons=f.echantillons
@@ -282,29 +279,29 @@ all_monofmt=(Reader_gmyc,Reader_ptp,Reader_abgd)
 
 """
 Charge le fichier 'fich, et rend l'instance de Source correspondante.
-L'instance a été chargée par .load().
+L'instance a Ã©tÃ© chargÃ©e par .load().
 
 Si 'fich comporte une extension correspondant au nom d'un format connu (casse
-insensible), ce format est utilisé. Sinon, la fonction essaie successivement
-les différents formats connus (décrits dans 'all_monofmt) ; le format identifié
-pourra être retrouvé par l'attribut .type de la Source rendue.
+insensible), ce format est utilisÃ©. Sinon, la fonction essaie successivement
+les diffÃ©rents formats connus (dÃ©crits dans 'all_monofmt) ; le format identifiÃ©
+pourra Ãªtre retrouvÃ© par l'attribut .type de la Source rendue.
 
-En cas d'erreur, génère une exception :
-    - OSError si le fichier ne peut être lu.
-    - SyntaxError si le fichier a une extension correspondant à un nom de
+En cas d'erreur, gÃ©nÃ¨re une exception :
+    - OSError si le fichier ne peut Ãªtre lu.
+    - SyntaxError si le fichier a une extension correspondant Ã  un nom de
         format, et que son contenu n'a pas la syntaxe correspondante.
-    - ValueError si le fichier a une syntaxe correcte (pour le format indiqué
-        par l'extension, ou pour le format identifié automatiquement) mais
-        comprend une incohérence interne. Si le fichier ne comprend aucun
-        échantillon, ou des échantillons redondants, l'exception est de type
+    - ValueError si le fichier a une syntaxe correcte (pour le format indiquÃ©
+        par l'extension, ou pour le format identifiÃ© automatiquement) mais
+        comprend une incohÃ©rence interne. Si le fichier ne comprend aucun
+        Ã©chantillon, ou des Ã©chantillons redondants, l'exception est de type
         EmptyMethodError ou RedundantNameError, qui sont des sous-classes
         de ValueError.
-    - UnknownFormatError si l'extension n'indique pas un format précis et si
-        le format n'a pu être déterminé automatiquement.
-Dans les deux cas SyntaxError et ValueError, .__cause__ donne le détail de
+    - UnknownFormatError si l'extension n'indique pas un format prÃ©cis et si
+        le format n'a pu Ãªtre dÃ©terminÃ© automatiquement.
+Dans les deux cas SyntaxError et ValueError, .__cause__ donne le dÃ©tail de
 l'erreur.
 """
-def Reader_monofmt(fich):
+def Reader_monofmt(fich: str) -> Source:
     ext=os.path.splitext(fich)[1][1:].upper()
     try:
         fn=dict((f.type,f) for f in all_monofmt)[ext]
@@ -312,12 +309,12 @@ def Reader_monofmt(fich):
         pass
     else:
         s=fn(fich)
-        s.load()
+        s.load() # type: ignore
         return s
     for fn in all_monofmt:
         try:
             s=fn(fich)
-            s.load()
+            s.load() # type: ignore
             return s
         except SyntaxError:
             pass
@@ -327,27 +324,27 @@ def Reader_monofmt(fich):
                     (fich,", ".join(f.type for f in all_monofmt)))
 
 ##"""
-##Crée l'Espace incluant toutes les Source mono-Methode de la liste 'monosrc.
+##CrÃ©e l'Espace incluant toutes les Source mono-Methode de la liste 'monosrc.
 ##
-##Les noms de Echantillon sont d'abord normalisés ; le nom d'origine est conservé
-##sous .orig_nom. Ensuite, les Methode sont comparées de façon à établir la
+##Les noms de Echantillon sont d'abord normalisÃ©s ; le nom d'origine est conservÃ©
+##sous .orig_nom. Ensuite, les Methode sont comparÃ©es de faÃ§on Ã  Ã©tablir la
 ##correspondance entre les Echantillon de toutes les Methode. Seuls sont
-##conservés dans chaque Methode les Echantillon qui existent dans toutes les
+##conservÃ©s dans chaque Methode les Echantillon qui existent dans toutes les
 ##Methode. Ainsi :
-##    - les Methode qui ont conservé intacte la liste de leurs Echantillon sont
-##        intégrées telles quelles dans le Espace rendu ; leur attribut .exclus
+##    - les Methode qui ont conservÃ© intacte la liste de leurs Echantillon sont
+##        intÃ©grÃ©es telles quelles dans le Espace rendu ; leur attribut .exclus
 ##        vaut None.
-##    - pour les Methode pour lesquels au moins un Echantillon a été supprimé,
-##        c'est une nouvelle instance de Methode qui est intégrée dans le Espace
+##    - pour les Methode pour lesquels au moins un Echantillon a Ã©tÃ© supprimÃ©,
+##        c'est une nouvelle instance de Methode qui est intÃ©grÃ©e dans le Espace
 ##        rendu ; leur attribut .exclus donne la liste des Echantillon exclus.
 ##
 ##Rend l'Espace produit. Celui-ci porte un attribut .meth_modif, qui est le
-##nombre de Methode remaniées (si 0, toutes les Methode de l'Espace sont celles
-##apportées par les sources de 'monosrc).
+##nombre de Methode remaniÃ©es (si 0, toutes les Methode de l'Espace sont celles
+##apportÃ©es par les sources de 'monosrc).
 ##
-##Génère une exception RedondantSpecimenError si la normalisation des noms
-##d'Echantillon génère des redondances dans une même Methode, ou EmptyMethodError
-##s'il n'y a aucun échantillon commun à toutes les méthodes.
+##GÃ©nÃ¨re une exception RedondantSpecimenError si la normalisation des noms
+##d'Echantillon gÃ©nÃ¨re des redondances dans une mÃªme Methode, ou EmptyMethodError
+##s'il n'y a aucun Ã©chantillon commun Ã  toutes les mÃ©thodes.
 ##"""
 ##def Espace_monofmt(monosrc):
 ##    meths=[s.methodes[0] for s in monosrc]
@@ -358,8 +355,8 @@ def Reader_monofmt(fich):
 ##            e.nom=rex.sub("_",e.nom.lower())
 ##        if len(m)>len(set(m)):
 ##            raise RedondantSpecimenError(
-##                        get_text("La méthode %s comprend des échantillons "
-##                                 "redondants après normalisation",
+##                        get_text("La mÃ©thode %s comprend des Ã©chantillons "
+##                                 "redondants aprÃ¨s normalisation",
 ##                                 "The method %s includes redondant samples"
 ##                                 "after renormalization")%
 ##                        m.nom)
@@ -367,7 +364,7 @@ def Reader_monofmt(fich):
 ##    for m in meths[1:]:
 ##        eset.intersection_update(m)
 ##    if len(eset)==0:
-##        raise EmptyMethodError(get_text("Aucun échantillon commun",
+##        raise EmptyMethodError(get_text("Aucun Ã©chantillon commun",
 ##                                        "No common samples"))
 ##    rep=0
 ##    newmeths=[]

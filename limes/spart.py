@@ -1,11 +1,24 @@
 
+from __future__ import annotations
+
 import re,datetime,sys
-from .limes import (Echantillon,Methode,Source,RedundantNameError,get_text,
-                    nullcontext)
+from .core import (Echantillon,Methode,Source,RedundantNameError,get_text,
+                   Espace)
+from .core import MLMsgType
+
 from operator import itemgetter
+
+from typing import (Optional,Any,Pattern,Match,Set,Tuple,Type,Union,cast,
+                    TextIO,List,Callable,TypeVar,Dict,overload)
 
 # -----------------------------------------------------------
 # Utilitaires.
+
+SectionType=Optional[str]
+NumligneType=Optional[int]
+LigneType=Tuple[int,str]
+LignesType=List[LigneType]
+ScoreType=Optional[float]
 
 """
 Rend le message d'erreur formé en utilisant le titre de section 'sec, le numéro de
@@ -13,7 +26,8 @@ ligne 'num, le message 'msgs, avec ses paramètre 'args (façon printf()). 'sec
 et/ou 'num peuvent valoir None si la valeur n'est pas connue. 'msgs est un
 tuple de messages (français, anglais).
 """
-def msgError(sec,num,msgs,*args):
+def msgError(sec: SectionType,num: NumligneType,msgs: MLMsgType,*args: Any)\
+                                    -> str :
     lst=[]
     if num is not None: lst.append(str(num))
     if sec is not None: lst.append(sec)
@@ -27,7 +41,8 @@ Sinon, génère une exception SyntaxError (voir msgError() pour 'sec, 'num, 'msg
 et 'args). 'msg est le couple des messages d'erreur ; le texte de la ligne 'lg
 lui est automatiquement ajouté.
 """
-def match(sec,num,rex,lg,msg):
+def match(sec: SectionType,num: NumligneType,rex: Pattern,lg: str,
+          msg: MLMsgType) -> Match:
     ma=rex.fullmatch(lg)
     if ma: return ma
     raise SyntaxError(msgError(sec,num,[m+" <%s>" for m in msg],lg))
@@ -37,20 +52,29 @@ Concatène toutes les lignes de la liste 'lst, en séparant chacune par un blanc
 Rend le couple (a,b) où 'a est le numéro de la première ligne, et 'b la ligne
 concaténée.
 """
-def lignesaplat(lst):
+def lignesaplat(lst: LignesType) -> tuple[int,str]:
     num=lst[0][0]
     return num," ".join(e[1] for e in lst)
 
-"""
-'mot est un entier sous forme textuelle. Rend la valeur numérique (int)
-correspondante. Contrôle que cette valeur est >=min. Si 'interog vaut True,
-accepte aussi que 'mot soit réduit à un point d'interrogation, et rend None
-dans ce cas. 'mot peut comprendre des blancs avant et après.
-Si erreur, génère une exception SyntaxError ou ValueError (voir msgError()
-pour 'sec, 'num, msg) ; le mot 'mot est autmatiquement ajouté dans le message.
-"""
-def get_int(sec,num,mot,msg,min=0,interog=False):
+@overload
+def get_int(sec: SectionType,num: NumligneType,mot: str,msg: MLMsgType,*,
+            interog: bool) -> Optional[int]: ...
+
+@overload
+def get_int(sec: SectionType,num: NumligneType,mot: str,msg: MLMsgType,*,
+            min: int) -> int: ...
+
+# 'mot est un entier sous forme textuelle. Rend la valeur numérique (int)
+# correspondante. Contrôle que cette valeur est >=min. Si 'interog vaut True,
+# accepte aussi que 'mot soit réduit à un point d'interrogation, et rend None
+# dans ce cas. 'mot peut comprendre des blancs avant et après.
+# Si erreur, génère une exception SyntaxError ou ValueError (voir msgError()
+# pour 'sec, 'num, msg) ; le mot 'mot est autmatiquement ajouté dans le message.
+#
+def get_int(sec: SectionType,num: NumligneType,mot: str,msg: MLMsgType,*,
+            interog: bool =False,min: int =0) -> Optional[int]:
     mot=mot.strip()
+    exc: Type[Exception]
     if interog and mot=="?": return None
     try:
         i=int(mot)
@@ -63,30 +87,48 @@ def get_int(sec,num,mot,msg,min=0,interog=False):
             return i
     raise exc(msgError(sec,num,[m+" <%s>" for m in msg],mot))
 
-"""
-Contrôle que la ligne 'lg est formée de 2 parties séparées par ':'. Rend le
-couple (a,b) où 'a et 'b sont la première et la deuxième partie respectivement,
-stripées. La première partie est numérique si 'isnum vaut True, auquel cas 'a
-est le int correspondant, qui doit être >0.
-Si 'strict vaut False, accepte que le ':' et la seconde partie soient absents ;
-'b vaut None dans ce cas.
-Les blancs en tête et en queue sont ignorés.
-Si erreur, génère une exception SyntaxError (voir msgError() pour 'sec, 'num).
-'msg est un couple de messages d'erreur décrivant le 1er terme, utilisé
-seulement si 'isnum vaut True : exemple : ("Nom invalide","Invalid name") ;
-'msg est ignoré si 'isnum vaut False.
-"""
-def split_2points(sec,num,lg,msg,isnum=False,strict=True):
+@overload
+def split_2points(sec: SectionType,num: NumligneType,lg: str,
+                  msg: MLMsgType,*,isnum: bool,strict: bool) \
+                  -> tuple[int,Optional[str]]: ...
+
+@overload
+def split_2points(sec: SectionType,num: NumligneType,lg: str,
+                  msg: MLMsgType,*,isnum: bool) \
+                  -> tuple[int,str]: ...
+
+@overload
+def split_2points(sec: SectionType,num: NumligneType,lg: str,msg: None) \
+                  -> tuple[str,str]: ...
+
+# Contrôle que la ligne 'lg est formée de 2 parties séparées par ':'. Rend le
+# couple (a,b) où 'a et 'b sont la première et la deuxième partie respectivement,
+# stripées. La première partie est numérique si 'isnum vaut True, auquel cas 'a
+# est le int correspondant, qui doit être >0.
+# Si 'strict vaut False, accepte que le ':' et la seconde partie soient absents ;
+# 'b vaut None dans ce cas.
+# Les blancs en tête et en queue sont ignorés.
+# Si erreur, génère une exception SyntaxError (voir msgError() pour 'sec, 'num).
+# 'msg est un couple de messages d'erreur décrivant le 1er terme, utilisé
+# seulement si 'isnum vaut True : exemple : ("Nom invalide","Invalid name") ;
+# 'msg est ignoré si 'isnum vaut False.
+#
+def split_2points(sec: SectionType,num: NumligneType,lg: str,
+                  msg: Optional[MLMsgType],*,
+                  isnum: bool =False,strict: bool =True) \
+                  -> tuple[Union[int,str],Optional[str]]:
     ett,dp,lg=lg.partition(':')
+    ret: Optional[str]
     if dp:
-        lg=lg.strip()
+        ret=lg.strip()
     else:
         if strict:
             raise SyntaxError(msgError(sec,num,("':' absent","':' is missing")))
-        lg=None
+        ret=None
     if isnum:
-        return (get_int(sec,num,ett,msg,min=1),lg)
-    return (ett.strip(),lg)
+        assert msg is not None
+        return (get_int(sec,num,ett,msg,min=1),ret)
+    return (ett.strip(),ret)
 
 """
 'mot est un score sous forme textuelle. Rend la valeur numérique (float)
@@ -96,7 +138,7 @@ blancs avant et après.
 Si erreur, génère une exception SyntaxError (voir msgError() pour 'sec et
 'num).
 """
-def get_score(sec,num,mot):
+def get_score(sec: SectionType,num: NumligneType,mot: str) -> ScoreType:
     mot=mot.strip()
     if mot=="?":
         return None
@@ -118,7 +160,8 @@ de 'avecsc : égale à la valeur en entrée si elle était True ou False,
 déterminée selon 'sc si elle valait None.
 Génère une Exception SyntaxError si 'avecsc et 'sc sont incohérents.
 """
-def get_avecsc(sec,num,avecsc,sc):
+def get_avecsc(sec: SectionType,num: NumligneType,avecsc: Optional[bool],
+               sc: Optional[str]) -> bool:
     if avecsc is None:
         avecsc=sc is not None
     else:
@@ -134,7 +177,7 @@ sn_rex=re.compile(r"\w+",re.ASCII)
 Contrôle que 'nom est un nom d'échantillon valide. Si ok, rend le nom stripé.
 Si ko, génère une exception SyntaxError.
 """
-def is_sample_name(sec,num,nom):
+def is_sample_name(sec: SectionType,num: NumligneType,nom: str) -> str:
     nom=nom.strip()
     if sn_rex.fullmatch(nom):
         return nom
@@ -146,7 +189,7 @@ def is_sample_name(sec,num,nom):
 Contrôle que 'nom est un nom de partition valide. Si ok, rend le nom stripé.
 Si ko, génère une exception SyntaxError.
 """
-def is_partition_name(sec,num,nom):
+def is_partition_name(sec: SectionType,num: NumligneType,nom: str) -> str:
     nom=nom.strip()
     ok=True
     if nom and nom.isascii():
@@ -169,7 +212,8 @@ déjà vus. Génère une exception RedundantNameError si 'nom a déjà été vu 
 insensible). Sinon, ajoute 'nom dans 'stock. 'label est le type d'objet, qui
 sera utilisé dans le message d'erreur. 'label est une liste (français, anglais).
 """
-def ctrl_redond(sec,num,nom,stock,label):
+def ctrl_redond(sec: SectionType,num: NumligneType,nom: str,stock: Set[str],
+                label: MLMsgType):
     nm2=nom.lower()
     if nm2 in stock:
         label=get_text(*label)
@@ -203,7 +247,9 @@ Cas particuliers :
     - Rend (num,"end",None) pour le bloc "end".
 Génère une exception SyntaxError si erreur.
 """
-def read_bloc(file,num):
+def read_bloc(file: TextIO,num: int) -> \
+                        Union[Tuple[None,None,None],
+                        Tuple[int,str,Optional[LignesType]]]:
     lst=[]
     outcomm=True
     num+=1
@@ -266,7 +312,7 @@ def read_bloc(file,num):
 Lit un bloc "Project_name" et rend le titre.
 Génère une exception SyntaxError si erreur.
 """
-def read_Project_name(sec,lst):
+def read_Project_name(sec: str,lst: LignesType) -> str:
     num,lg=lignesaplat(lst)
     lg=lg.strip()
     if lg: return lg
@@ -278,32 +324,11 @@ def read_Project_name(sec,lst):
 Lit un bloc "Date" et rend le datetime correspond.
 Génère une exception SyntaxError si la date est mal formée.
 """
-def read_Date(sec,lst):
+def read_Date(sec: str,lst: LignesType) -> datetime.datetime:
     num,lg=lignesaplat(lst)
     lg=lg.strip()
-    v=sys.version_info
-    v=v.major*100+v.minor
-    if v<307:
-        rex_Date=re.compile(
-            r"(?P<date>\d{4}-\d\d-\d\d)"
-            r"(?:(?P<time>T\d\d:\d\d:\d\d)"
-            r"(?P<micro>\.\d{6})?"
-            r"(?P<tz>\+\d\d:\d\d)?)?")
-            # La syntaxe acceptée :
-            # aaaa-mm-jj[Thh:mm:ss[.mmmmmm][shh:mm]]
-        ma=match(sec,num,rex_Date,lg,("Date mal formée","Malformed date"))
-        fmt="%Y-%m-%d"
-        if ma["time"]:
-            fmt+="T%H:%M:%S"
-            if ma["micro"]: fmt+=".%f"
-            if ma["tz"]:
-                fmt+="%z"
-                lg=lg[:-3]+lg[-2:]
     try:
-        if v>=307:
-            return datetime.datetime.fromisoformat(lg)
-        else:
-            return datetime.datetime.strptime(lg,fmt)
+        return datetime.datetime.fromisoformat(lg)
     except ValueError:
         raise SyntaxError(msgError(sec,num,("Date invalide","Invalid date")))
 
@@ -315,28 +340,29 @@ spartitions sont uniques (casse non sensible).
 Génère une exception SyntaxError ou ValueError si erreur, RedundantNameError si
 deux partitions ont le même nom.
 """
-def read_N_spartitions(sec,lst):
+def read_N_spartitions(sec: str,lst: LignesType) \
+                            -> List[Tuple[str,ScoreType]]:
     num,lg=lignesaplat(lst)
-
     nb,lg=split_2points(sec,num,lg,("Nombre de partitions mal formé",
                                     "Malformed number of spartitions"),
                         isnum=True)
-    lg=lg.split('/')
-    if len(lg)!=nb:
+    llg=lg.split('/')
+    if len(llg)!=nb:
         raise ValueError(msgError(sec,num,
                     ("Le nombre de partitions ne correspond pas (%d <> %d)",
                      "The number of partitions does not match (%d <> %d)"),
-                                  nb,len(lg)))
+                                  nb,len(llg)))
     part=[]
-    dejavu=set()
+    dejavu: Set[str] =set()
     avecsc=None
-    for p in lg:
+    sc: Optional[str]
+    for p in llg:
         nom,sep,sc=p.partition(',')
         nom=is_partition_name(sec,num,nom)
         ctrl_redond(sec,num,nom,dejavu,("spartition","spartition"))
         if not sep: sc=None
         avecsc=get_avecsc(sec,num,avecsc,sc)
-        part.append((nom,get_score(sec,num,sc) if avecsc else None))
+        part.append((nom,get_score(sec,num,cast(str,sc)) if avecsc else None))
     return part
 
 """
@@ -344,11 +370,11 @@ Lit un bloc "N_individuals" et rend la liste du nombre d'échantillons pour
 chaque spartition.
 Génère une exception SyntaxError si erreur.
 """
-def read_N_individuals(sec,lst):
+def read_N_individuals(sec: str,lst: LignesType) -> List[int]:
     num,lg=lignesaplat(lst)
     return [get_int(sec,num,s,("Nombre d'échantillons invalide",
-                               "Invalid number of samples"),
-                    min=1)
+                                    "Invalid number of samples"),
+                         min=1)
             for s in lg.split('/')]
 
 """
@@ -359,7 +385,8 @@ longueurs différentes car chaque spartition définit un nombre différent
 d'espèces.
 Génère une exception SyntaxError ou ValueError si erreur.
 """
-def read_N_subsets(sec,lst):
+def read_N_subsets(sec: str,lst: LignesType) \
+                                -> List[List[ScoreType]]:
     num,lg=lignesaplat(lst)
     subs=[]
     avecsc=None
@@ -369,32 +396,37 @@ def read_N_subsets(sec,lst):
                              strict=False,isnum=True)
         avecsc=get_avecsc(sec,num,avecsc,lgs)
         if avecsc:
-            lgs=lgs.split(',')
-            if len(lgs)!=ns:
+            assert lgs is not None
+            llgs=lgs.split(',')
+            if len(llgs)!=ns:
                 raise ValueError(msgError(sec,num,
                                     ("Subset <%s> : nombre de scores différent",
                                      "Subset <%s>: different number of scores"),
                                           s))
-            subs.append([get_score(sec,num,s) for s in lgs])
+            subs.append([get_score(sec,num,s) for s in llgs])
         else:
             subs.append([None]*ns)
     return subs
+
+T=TypeVar('T',Optional[int],ScoreType)
 
 """
 Traitement commun aux blocs Individual_assignment et Individual_score. 'fn est
 la fonction spécifique, appelée avec deux arguments : le numéro de ligne et
 un terme sous forme str ; elle doit rendre l'élément à restituer.
 """
-def read_Individual_common(sec,lst,fn):
-    output=[]
-    dejavu=set()
+def read_Individual_common(sec: str,lst: LignesType,
+                           fn: Callable[[int,str],T]) -> \
+                           Tuple[int,List[Tuple[str,List[T]]]]:
+    output: List[Tuple[str,List[T]]]=[]
+    dejavu: Set[str] =set()
     nbpart=0
     for num,lg in lst:
         ech,lg=split_2points(sec,num,lg,None)
         ech=is_sample_name(sec,num,ech)
         ctrl_redond(sec,num,ech,dejavu,("échantillon","sample"))
-        lg=lg.split('/')
-        n=len(lg)
+        llg=lg.split('/')
+        n=len(llg)
         if output:
             if n!=nbpart:
                 raise ValueError(msgError(sec,num,
@@ -403,7 +435,7 @@ def read_Individual_common(sec,lst,fn):
                                           n))
         else:
             nbpart=n
-        output.append((ech,[fn(num,s) for s in lg]))
+        output.append((ech,[fn(num,s) for s in llg]))
     return nbpart,output
 
 """
@@ -417,8 +449,9 @@ On a la garantie que les noms des échantillons sont uniques (casse non sensible
 Génère une exception SyntaxError ou ValueError si erreur,
 RedundantNameError si un échantillon est redondant.
 """
-def read_Individual_assignment(sec,lst):
-    def read_rank(num,rk):
+def read_Individual_assignment(sec: str,lst: LignesType) -> \
+                        Tuple[int,List[Tuple[str,List[Optional[int]]]]]:
+    def read_rank(num: int,rk: str) -> Optional[int]:
         return get_int(sec,num,rk,("Rang invalide","Invalid rank"),interog=True)
     return read_Individual_common(sec,lst,read_rank)
 
@@ -432,8 +465,9 @@ On a la garantie que les noms des échantillons sont uniques.
 Génère une exception SyntaxError ou ValueError si erreur,
 RedundantNameError si un échantillon est redondant.
 """
-def read_Individual_score(sec,lst):
-    def read_score(num,sc):
+def read_Individual_score(sec: str,lst: LignesType) -> \
+                        Tuple[int,List[Tuple[str,List[ScoreType]]]]:
+    def read_score(num: int,sc: str) -> ScoreType:
         return get_score(sec,num,sc)
     return read_Individual_common(sec,lst,read_score)
 
@@ -441,7 +475,7 @@ def read_Individual_score(sec,lst):
 Lit un bloc XXX_score_type et rend la liste des noms de types, un par
 partition. Le type vaut None s'il n'est pas défini pour cette partition.
 """
-def read_Spartition_score_type(sec,lst):
+def read_Spartition_score_type(sec: str,lst: LignesType) -> List[Optional[str]]:
     num,lg=lignesaplat(lst)
     return [(None if t=="?" else t) for t in
                                         (tt.strip() for tt in lg.split('/'))]
@@ -455,9 +489,9 @@ noms de partition sont syntaxiquement corrects et uniques (casse insensible).
 Génère une exception SyntaxError si erreur, RedundantNameError si une partition
 est citée deux fois.
 """
-def read_Tree(sec,lst):
+def read_Tree(sec: str,lst: LignesType) -> Dict[str,str]:
     output={}
-    dejavu=set()
+    dejavu: Set[str] =set()
     for num,lg in lst:
         meth,lg=split_2points(sec,num,lg,None)
         meth=is_partition_name(sec,num,meth)
@@ -536,36 +570,34 @@ des attributs suivants :
 class Reader_spart(Source):
     type="spart"
 
-    def __init__(self,fich):
+    def __init__(self,fich: str):
         self.fich=fich
 
-    def load(self):
-        if self.methodes is None:
-            blocs={}
+    def load(self) -> List[Methode]:
+        if not hasattr(self,"methodes"):
+            blocs: Dict[Union[str,Sections],Any] ={}
             msg_miss=get_text("Bloc '%s' manquant","Missing '%s' block")
-            if isinstance(self.fich,str):
-                cm=open(self.fich)
-            else:
-                cm=nullcontext(self.fich)
             try:
-                with cm as f:
-                    num=0
+                with open(self.fich) as f:
+                    num: Optional[int] =0
                     vu=False
                     while True:
+                        assert num is not None
                         num,titre,lst=read_bloc(f,num)
-                        if lst is None:
+                        if lst is None: # fin ou begin/end
                             if vu:
-                                if titre is None:
+                                if titre is None: # fin
                                     raise SyntaxError(msg_miss%"end")
                                 if titre=="begin":
                                     raise SyntaxError(msgError(titre,num,
                                                 ("Bloc 'begin spart' mal placé",
                                                  "Misplaced 'begin spart' block")))
                                 break # "end" rencontré.
-                            if titre is None:
+                            if titre is None: # fin
                                 raise SyntaxError(msg_miss%"begin spart")
                             if titre=="begin": vu=True
                         else:
+                            assert titre is not None
                             if vu:
                                 blocs[titre.capitalize()]=lst
                 # A partir d'ici, 'blocs contient tous les blocs lus dans le
@@ -609,6 +641,7 @@ class Reader_spart(Source):
                 #   Command         Dictionnaire { nom_spart, ligne }
 
                 nbpart=len(blocs[Sections.N_spartitions])
+                ko: Optional[Sections]
                 for sec in (Sections.N_individuals,Sections.N_subsets,
                            Sections.Spart_score_type,Sections.Subset_score_type,
                            Sections.Ind_score_type):
@@ -688,11 +721,11 @@ class Reader_spart(Source):
                     m=Methode(nom,list(map(itemgetter(0),le)),esp,self)
                     # Le nombre d'échantillons est forcément >=1 car cela a été
                     # testé dans read_N_individuals().
-                    m.score=score
+                    m.score=score # type: ignore
                     def notallnone(lst):
                         return any(map(lambda e: e is not None,lst))
 
-                    m.Subset_score=subset if notallnone(subset) else None
+                    m.Subset_score=subset if notallnone(subset) else None # type: ignore
 
                     for sec in (Sections.Spart_score_type,
                                Sections.Subset_score_type,
@@ -703,7 +736,7 @@ class Reader_spart(Source):
                         setattr(m,sec.value,
                                 blocs[sec].get(nom) if sec in blocs else None)
 
-                    m.Individual_score=None
+                    m.Individual_score=None # type: ignore
                     if Sections.Ind_score in blocs:
                         d=dict((e,s[rang])
                                for (e,s) in blocs[Sections.Ind_score])
@@ -714,15 +747,15 @@ class Reader_spart(Source):
                         d=dict((ech,v) for ech,v in d.items() if v is not None)
                         # d : Echantillon -> score, uniquement si score!=None
                         if d:
-                            m.Individual_score=d
+                            m.Individual_score=d # type: ignore
 
                     self.methodes.append(m)
                 self.titre=blocs[Sections.Project_name]
                 self.date=blocs[Sections.Date]
             except Exception as e:
                 raise type(e)(get_text("Ne peut charger le fichier Spart %s",
-                                         "Cannot load the Spart file %s")%
-                                self.fich)
+                                       "Cannot load the Spart file %s")%
+                              self.fich)
         return self.methodes
 
 """
@@ -732,7 +765,7 @@ Project_name). 'fich peut être un objet file-like déjà ouvert.
 Génère une exception si ne peut ouvrir le fichier, ou si un échantillon a un
 nom non conforme avec la syntaxe Spart.
 """
-def Writer_spart(fich,titre,espace):
+def Writer_spart(fich: Union[TextIO,str],titre: str,espace: Espace):
     # On travaille entièrement sur les pMethode du Espace, qui prend donc en
     # compte les éventuels renommages et/ou suppressions d'échantillons, ansi
     # que les renommages de noms de méthodes.
@@ -760,7 +793,8 @@ def Writer_spart(fich,titre,espace):
     if isinstance(fich,str):
         cm=open(fich,"w")
     else:
-        cm=nullcontext(fich)
+        from contextlib import nullcontext
+        cm=cast(TextIO,nullcontext(fich))
     with cm as f:
         f.write("begin spart;\n")
         f.write("\n%s = %s;\n"%(Sections.Project_name.value,titre))
@@ -783,7 +817,7 @@ def Writer_spart(fich,titre,espace):
                               " / ".join(str(len(m)) for m in espace)))
 
         # N_subsets
-        f.write("\n%s = "%Sections.N_subsets.value)
+        f.write("\n%s = "%Sections.N_subsets.value) # type: ignore
         lstsub=getlstval("Subset_score",False)
         lst=[]
         for i,pm in enumerate(espace):
@@ -826,7 +860,7 @@ def Writer_spart(fich,titre,espace):
                 espace2.append(dict((ech,on[sp]) for ech,sp in pm.items()))
             else:
                 espace2.append(pm)
-        f.write("\n%s =\n"%Sections.Assignment.value)
+        f.write("\n%s =\n"%Sections.Assignment.value) # type: ignore
         for ech in espace.echantillons:
             f.write("%s: "%ech.nom)
             lst=[]

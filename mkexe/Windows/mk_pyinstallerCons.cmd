@@ -27,7 +27,6 @@ call C:\Users\jacko\softs\Python37\Scripts\pyinstaller --onefile ^
 	--exclude-module http ^
 	--exclude-module pydoc_data ^
 	--exclude-module unittest ^
-	--exclude-module urllib ^
 	--exclude-module pydlib ^
 	--exclude-module tkinter ^
 	--name %NAME% ^
@@ -35,6 +34,7 @@ call C:\Users\jacko\softs\Python37\Scripts\pyinstaller --onefile ^
 	boot.py
 
 rem : ne pas supprimer xml
+rem : ne pas supprimer urllib : utilisé par openpyxl
 rem : option debug pour voir les fichiers intégrés : --debug noarchive
 rem : il introduit canvastableur au top niveau et dans pydlib ->
 rem : on supprime pydlib
